@@ -54,7 +54,7 @@ class QMC5883P(mag_base):
         self.set_range(0)
 
     def i2c_readregs(self, regAddr, bytenum):  # int,int,int
-        return self.i2c.read_i2c_block_data(QMC5883P.ADDR, regAddr, bytenum)
+        return bytes(self.i2c.read_i2c_block_data(QMC5883P.ADDR, regAddr, bytenum))
 
     def i2c_writereg(self, regAddr, buff):  # int,int,bytes
         if isinstance(buff, int):
