@@ -95,14 +95,14 @@ class QMC5883P(mag_base):
 
     def reset(self):
         self.i2c_writereg(0x0B, QMC5883P.CR2_SOFT_RESET)
-        time.sleep_ms(1)
+        time.sleep(0.001)
 
     def ready(self):
         status = b"\x02"
         i = 0
         while status[0] & 0x01 == 0x00:
             i += 1
-            time.sleep_ms(1)
+            time.sleep(0.001)
             status = self.i2c_readregs(0x09, 1)
             if i > 100:
                 raise IOError("request timeout")
