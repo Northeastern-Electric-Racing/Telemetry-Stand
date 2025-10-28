@@ -5,7 +5,7 @@ from pyubx2 import UBXReader
 # For Windows, it might be 'COM3'.
 # For Linux/macOS, it might be '/dev/ttyACM0' or '/dev/ttyUSB0'.
 # You can find the correct port in your system's device manager or by using tools.
-port = "/dev/ttyUBS0"
+port = "/dev/ttyUSB0"
 baudrate = 38400  # Default baud rate for many UBLOX modules
 
 # Create a serial connection object
