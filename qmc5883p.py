@@ -35,6 +35,15 @@ class QMC5883P(mag_base):
     CR1_DOWN_SMPL4 = 2 << 6
     CR1_DOWN_SMPL8 = 3 << 6
 
+    x_max = 6341
+    x_min = -880
+
+    y_max = 4130
+    y_min = -4013
+
+    x_offset = (x_max + x_min) / 2
+    y_offset = (y_max + y_min) / 2 
+
     _lsb_per_G = [1000, 2500, 3750, 15000]
 
     def __init__(self, i2c, temp_offset=0):
@@ -48,7 +57,7 @@ class QMC5883P(mag_base):
             QMC5883P.CR1_DOWN_SMPL8
             | QMC5883P.CR1_OVR_SMPL8
             | QMC5883P.CR1_ODR_200HZ
-            | QMC5883P.CR1_MODE_NORMAL,
+            | QMC5883P.CR1_MODE_CONT,
         )
         self.ready()
         self.set_range(0)
@@ -113,4 +122,6 @@ class QMC5883P(mag_base):
     def read_scaled(self):
         x, y, z = self.read_raw()
         scale = QMC5883P._lsb_per_G[self.range]
-        return (x / scale, y / scale, z / scale, 0)
+        x_cal = (x - self.x_offset) / scale
+        y_cal = (y - self.y_offset) / scale
+        return (x_cal, y_cal, z / scale, 0)
