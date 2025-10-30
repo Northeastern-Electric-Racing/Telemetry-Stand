@@ -24,7 +24,9 @@ Then reboot. Confirm the kernel module is present: `lsmod | grep pwm` and look f
 
 2. Use Venv
 
-`python -m venv venv`
+You need system site packages to use the gps system module available on the pi
+
+`python -m venv venv --system-site-packages`
 
 `source ./venv/bin/activate`
 
