@@ -1,22 +1,33 @@
-import serial
-from pyubx2 import UBXReader
+import gps  # the gpsd interface module
 
-port = "/dev/ttyUSB0"
-baudrate = 9600  # try 9600 first if 38400 gives nothing
+session = gps.gps(mode=gps.WATCH_ENABLE)
 
-with serial.Serial(port, baudrate, timeout=2) as stream:
-    print(f"Connected to {port} at {baudrate} baud.")
-    ubr = UBXReader(stream)
+try:
+    while 0 == session.read():
+        if not (gps.MODE_SET & session.valid):
+            # not useful, probably not a TPV message
+            continue
 
-    try:
-        while True:
-            (raw_data, parsed_data) = ubr.read()
-            if parsed_data:
-                if parsed_data.identity == "NAV-PVT":
-                    print(
-                        f"Lat: {parsed_data.lat / 1e7:.6f}, "
-                        f"Lon: {parsed_data.lon / 1e7:.6f}, "
-                        f"FixType: {parsed_data.fixType}"
-                    )
-    except KeyboardInterrupt:
-        print("\nStopped.")
+        print(
+            "Mode: %s(%d) Time: "
+            % (("Invalid", "NO_FIX", "2D", "3D")[session.fix.mode], session.fix.mode),
+            end="",
+        )
+        # print time, if we have it
+        if gps.TIME_SET & session.valid:
+            print(session.fix.time, end="")
+        else:
+            print("n/a", end="")
+
+        if gps.isfinite(session.fix.latitude) and gps.isfinite(session.fix.longitude):
+            print(" Lat %.6f Lon %.6f" % (session.fix.latitude, session.fix.longitude))
+        else:
+            print(" Lat n/a Lon n/a")
+
+except KeyboardInterrupt:
+    # got a ^C.  Say bye, bye
+    print("")
+
+# Got ^C, or fell out of the loop.  Cleanup, and leave.
+session.close()
+exit(0)
