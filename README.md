@@ -30,17 +30,6 @@ You need system site packages to use the gps system module available on the pi
 
 `source ./venv/bin/activate`
 
-### GPS Interaction
-
-GPSd was installed and enabled to start at boot:
-```
-sudo apt install gpsd gspd-clients -y
-sudo systemctl enable gpsd
-```
-Then, the tty device of the GPS (in this case `/dev/ttyUSB0`) was added to `/etc/default/gpsd`.  
-After that, reboot.  Then run `cgps` to see what is going on with the GPS and use the [default client](https://gpsd.gitlab.io/gpsd/gpsd-client-example-code.html) (other clients can be found on pypi). 
-
-
 3. Install packages
 
 `./venv/bin/pip3 install -r requirements.txt`
@@ -58,5 +47,15 @@ This uses the library's HardwarePWM API which maps to the platform PWM channels 
 Run `sudo raspi-config`
 
 Then do `Interface Options → I2C → Enable`
+
+### GPS Interaction
+
+GPSd was installed and enabled to start at boot:
+```
+sudo apt install gpsd gspd-clients -y
+sudo systemctl enable gpsd
+```
+Then, the tty device of the GPS (in this case `/dev/ttyUSB0`) was added to `/etc/default/gpsd`.  
+After that, reboot.  Then run `cgps` to see what is going on with the GPS and use the [default client](https://gpsd.gitlab.io/gpsd/gpsd-client-example-code.html) (other clients can be found on pypi). 
 
 
