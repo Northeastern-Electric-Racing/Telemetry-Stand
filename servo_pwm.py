@@ -3,15 +3,16 @@
 import argparse
 import time
 import sys
+from rpi_hardware_pwm import HardwarePWM
 
+
+max_frequency = 500  # 900 us
+min_frequency = 200 # 1 / 0.0021  # 2100 us
 
 def parse_args():
     p = argparse.ArgumentParser(description="Set PWM on a GPIO pin (BCM numbering).")
     p.add_argument(
-        "--pin", type=int, default=12, help="BCM pin number to use (default: 12)"
-    )
-    p.add_argument(
-        "--freq", type=float, default=1000.0, help="Frequency in Hz (default: 1000)"
+        "--freq", type=float, default=max_frequency, help="Frequency in Hz (default: 900us)"
     )
     p.add_argument(
         "--duty",
@@ -24,12 +25,6 @@ def parse_args():
         type=float,
         default=5.0,
         help="Duration in seconds to run PWM (default: 5). Use 0 for indefinite",
-    )
-    p.add_argument(
-        "--hardware",
-        type=bool,
-        default=True,
-        help="Use hardware PWM if available (default: True)",
     )
     # Options specific to rpi-hardware-pwm: chip/pwm_channel
     p.add_argument(
@@ -53,60 +48,33 @@ def main():
         print("Error: --duty must be between 0 and 100")
         sys.exit(2)
 
-    if (args.freq <= 200):
-         print("Error: --freq must be greater than 200 Hz for servo positional")
-         sys.exit(2)
-
-    if (args.freq >= 1000):
-         print("Error: --freq must be less than 1000 Hz for servo positional")
-         sys.exit(2)
-
-    GPIO = None
-    rpi_hw = None
-
-    # Auto-detect drivers if requested
-    if args.hardware:
-        try:
-            from rpi_hardware_pwm import HardwarePWM as _HardwarePWM
-
-            rpi_hw = _HardwarePWM
-        except Exception:
-            rpi_hw = None
-    else:
-        try:
-            import RPi.GPIO as _GPIO
-
-            GPIO = _GPIO
-        except Exception:
-            GPIO = None
+    print("min frequency: %.2f Hz" % min_frequency)
+    print("max frequency: %.2f Hz" % max_frequency)
 
     pwm = None
     try:
-        if GPIO != None:
-            # Use BCM numbering
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(args.pin, GPIO.OUT)
-            pwm = GPIO.PWM(args.pin, args.freq)
-            pwm.start(args.duty)
+        pwm = HardwarePWM(
+            pwm_channel=int(args.pwm_channel),
+            hz=int(args.freq),
+            chip=int(args.chip),
+        )
+        pwm.start(int(args.duty))
 
-        elif rpi_hw != None:
-            # Use rpi-hardware-pwm: map chip + channel to start/stop
-            # The library expects (pwm_channel, hz, chip)
-            try:
-                pwm = rpi_hw(
-                    pwm_channel=int(args.pwm_channel),
-                    hz=int(args.freq),
-                    chip=int(args.chip),
-                )
-                pwm.start(int(args.duty))
-            except Exception as e:
-                raise RuntimeError(f"Failed to start rpi-hardware-pwm: {e}")
+        freq = int(args.freq)
+        freq_delta = 10
 
         start = time.time()
         while True:
             elapsed = time.time() - start
-            if args.duration > 0 and elapsed >= args.duration:
-                break
+            freq = freq + freq_delta
+            pwm.change_frequency(int(freq))
+            print(f"Changed frequency to: {freq} Hz")
+            if (freq > max_frequency):
+                freq_delta = -1
+            elif (freq < min_frequency):
+                freq_delta = 1
+            # if args.duration > 0 and elapsed >= args.duration:
+            #     break
             time.sleep(0.1)
 
     except KeyboardInterrupt:
@@ -115,17 +83,7 @@ def main():
         print(f"Error while running PWM: {e}")
     finally:
         # Stop PWM/cleanup
-        if pwm:
-            try:
-                pwm.stop()
-            except Exception:
-                pass
-
-        if GPIO != None:
-            try:
-                GPIO.cleanup()
-            except Exception:
-                pass
+        pwm.stop()
 
         print("Done")
 
