@@ -1,54 +1,56 @@
 from smbus2 import SMBus
 from qmc5883p import QMC5883P
 import time
-import math
 from rpi_hardware_pwm import HardwarePWM
 
-PWM_CHANNEL = 0  # GPIO 12
-PWM_CHIP = 0
-I2C_BUS = 1
-TARGET_HEADING = 0
 
-DISTANCE_AT_MAX_SPEED = 0.150 # Degrees per microsecond at max speed
-GEAR_RATIO = 2.3
+def calibrate_compass(
+    qmc5883p_handle: QMC5883P,
+    pwm: HardwarePWM,
+    distance_at_max_speed=240.0,
+    gear_ratio=2.3,
+    amount_to_rotate_deg=720,
+) -> tuple[int, int, int, int]:
+    """
+    Calibrates the compass by rotating the sensor and recording min/max values.
+    """
 
-ROTATION_PER_SECOND = 1000000 / (DISTANCE_AT_MAX_SPEED * GEAR_RATIO)
+    # Case B: DISTANCE_AT_MAX_SPEED is the motor speed (deg/sec) and gear ratio = motor_rev / output_rev
+    output_deg_per_sec_B = distance_at_max_speed / gear_ratio
+    time_to_rotate_B = amount_to_rotate_deg / output_deg_per_sec_B  # seconds
 
-AMOUNT_TO_ROTATE = 360 * 2
+    print("Case B (speed is motor):", time_to_rotate_B, "s")  # -> ~6.903 s
 
-TIME_TO_ROTATE = AMOUNT_TO_ROTATE / ROTATION_PER_SECOND
+    min_x, max_x = 32768, -32768
+    min_y, max_y = 32768, -32768
 
-# Frequency range (Hz) and center frequency for neutral stop
-min_freq = 200  # 2100 us pulse
-max_freq = 500  # 900 us pulse
+    # Start PWM to rotate
+    pwm.start(50)
 
-QMC5883P = QMC5883P(SMBus(I2C_BUS))
+    time_elapsed = 0
+    try:
+        while time_elapsed < time_to_rotate_B:
+            x_gauss, y_gauss, z_gauss = qmc5883p_handle.read_raw()
 
-min_x, max_x = 32768, -32768
-min_y, max_y = 32768, -32768
+            print(f"X: {x_gauss}, Y: {y_gauss}, Z: {z_gauss}")
 
-neutral_freq = (max_freq + min_freq) / 2
-# Set to max frequency to just spin in a circle
-pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(max_freq), chip=PWM_CHIP)
-pwm.start(50)
+            min_x = min(min_x, x_gauss)
+            max_x = max(max_x, x_gauss)
+            min_y = min(min_y, y_gauss)
+            max_y = max(max_y, y_gauss)
 
-time_elapsed = 0
+            time_elapsed += 0.01
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        print("Exiting...")
+    finally:
+        pwm.stop()
 
-while time_elapsed < TIME_TO_ROTATE:
-    x_gauss, y_gauss, z_gauss = QMC5883P.read_raw()
+    # Write min/max values to file
+    with open("compass_calibration.json", "w") as f:
+        text = f'{{"min_x": {min_x}, "max_x": {max_x}, "min_y": {min_y}, "max_y": {max_y}}}\n'
+        f.write(text)
 
-    print(f"X: {x_gauss}, Y: {y_gauss}, Z: {z_gauss}")
+        print(f"Wrote calibration data to compass_calibration.json: {text}")
 
-    min_x = min(min_x, x_gauss)
-    max_x = max(max_x, x_gauss)
-    min_y = min(min_y, y_gauss)
-    max_y = max(max_y, y_gauss)
-
-
-    time_elapsed += 0.2
-    time.sleep(0.2)
-
-pwm.stop()
-
-print(f"X min: {min_x}, X max: {max_x}")
-print(f"Y min: {min_y}, Y max: {max_y}")
+    return min_x, max_x, min_y, max_y

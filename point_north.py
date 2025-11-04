@@ -4,6 +4,7 @@ import time
 import math
 from rpi_hardware_pwm import HardwarePWM
 from smbus2 import SMBus
+from calibrate_compass import calibrate_compass
 
 PWM_CHANNEL = 0  # GPIO 12
 PWM_CHIP = 0
@@ -25,6 +26,13 @@ integral = 0.0
 
 QMC = QMC5883P(SMBus(I2C_BUS))
 pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(neutral_freq), chip=PWM_CHIP)
+
+min_x, max_x, min_y, max_y = calibrate_compass(QMC, pwm)
+
+time.sleep(1)
+
+QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
+
 pwm.start(50)
 
 try:

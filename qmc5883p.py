@@ -35,19 +35,18 @@ class QMC5883P(mag_base):
     CR1_DOWN_SMPL4 = 2 << 6
     CR1_DOWN_SMPL8 = 3 << 6
 
-    x_max = 6341
-    x_min = -880
-
-    y_max = 4130
-    y_min = -4013
-
-    x_offset = (x_max + x_min) / 2
-    y_offset = (y_max + y_min) / 2 
-
     _lsb_per_G = [1000, 2500, 3750, 15000]
 
-    def __init__(self, i2c, temp_offset=0):
+    def __init__(self, i2c, x_max=None, x_min=None, y_max=None, y_min=None):
         super().__init__(i2c)
+        self.x_max = x_max
+        self.x_min = x_min
+        self.y_max = y_max
+        self.y_min = y_min
+
+        self.x_offset = (x_max + x_min) / 2
+        self.y_offset = (y_max + y_min) / 2
+
         self.reset()
 
         self.i2c_writereg(0x29, b"\x06")  # define the sign for syz axis
@@ -122,6 +121,9 @@ class QMC5883P(mag_base):
     def read_scaled(self):
         x, y, z = self.read_raw()
         scale = QMC5883P._lsb_per_G[self.range]
+        if self.x_offset is None or self.y_offset is None:
+            return (x / scale, y / scale, z / scale, 0)
+
         x_cal = (x - self.x_offset) / scale
         y_cal = (y - self.y_offset) / scale
         return (x_cal, y_cal, z / scale, 0)
