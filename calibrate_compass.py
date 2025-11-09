@@ -1,4 +1,3 @@
-from smbus2 import SMBus
 from qmc5883p import QMC5883P
 import time
 from rpi_hardware_pwm import HardwarePWM
@@ -9,13 +8,13 @@ def calibrate_compass(
     pwm: HardwarePWM,
     distance_at_max_speed=240.0,
     gear_ratio=2.3,
-    amount_to_rotate_deg=720,
+    amount_to_rotate_deg=540,
 ) -> tuple[int, int, int, int]:
     """
     Calibrates the compass by rotating the sensor and recording min/max values.
     """
 
-    # Case B: DISTANCE_AT_MAX_SPEED is the motor speed (deg/sec) and gear ratio = motor_rev / output_rev
+    # DISTANCE_AT_MAX_SPEED is the motor speed (deg/sec) and gear ratio = motor_rev / output_rev
     output_deg_per_sec_B = distance_at_max_speed / gear_ratio
     time_to_rotate_B = amount_to_rotate_deg / output_deg_per_sec_B  # seconds
 

@@ -44,8 +44,12 @@ class QMC5883P(mag_base):
         self.y_max = y_max
         self.y_min = y_min
 
-        self.x_offset = (x_max + x_min) / 2
-        self.y_offset = (y_max + y_min) / 2
+        if x_max is None or x_min is None or y_max is None or y_min is None:
+            self.x_offset = None
+            self.y_offset = None
+        else:
+            self.x_offset = (x_max + x_min) / 2
+            self.y_offset = (y_max + y_min) / 2
 
         self.reset()
 
