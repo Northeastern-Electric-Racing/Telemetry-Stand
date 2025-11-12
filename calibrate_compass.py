@@ -39,7 +39,7 @@ async def calibrate_compass(
             max_y = max(max_y, y_gauss)
 
             time_elapsed += 0.01
-            asyncio.sleep(0.01)
+            await asyncio.sleep(0.01)
     except KeyboardInterrupt:
         print("Exiting...")
     finally:

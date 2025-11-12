@@ -24,10 +24,10 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
     # Set to max frequency to just spin in a circle for calibration
     pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
 
-    asyncio.sleep(1)
-
     min_x, max_x, min_y, max_y = await calibrate_compass(QMC, pwm)
     QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
+
+    await asyncio.sleep(1)
 
     target_angle = 0.0
 
