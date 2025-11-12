@@ -19,22 +19,18 @@ I2C_BUS = 1
 HOST = "192.168.100.11"
 
 
-async def point_at_car():
+async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
+    best_rssi = -100.0  # initial low value
+
     QMC = QMC5883P(SMBus(I2C_BUS))
 
     # Set to max frequency to just spin in a circle for calibration
     pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
 
-    # Start a thread to read rssi values and populate a buffer
-    rssi_buffer = deque(maxlen=16)
-    rssi_lock = asyncio.Lock()
-    best_rssi = -100.0  # initial low value
-
-    asyncio.create_task(collect_rssi_data(HOST, rssi_buffer, rssi_lock))
+    time.sleep(1)
 
     min_x, max_x, min_y, max_y = calibrate_compass(QMC, pwm)
     QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
-    time.sleep(1)
 
     target_angle = 0.0
 
@@ -80,5 +76,23 @@ async def point_at_car():
         await asyncio.sleep(dt)
 
 
+# Initialize tasks and await for them to end
+async def main():
+    rssi_buffer = deque(maxlen=16)
+    rssi_lock = asyncio.Lock()
+
+    rssi_handle = asyncio.create_task(collect_rssi_data(HOST, rssi_buffer, rssi_lock))
+    point_handle = asyncio.create_task(point_at_car(rssi_buffer, rssi_lock))
+
+    tasks = [rssi_handle, point_handle]
+
+    try:
+        await asyncio.gather(*tasks)
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 if __name__ == "__main__":
-    asyncio.run(point_at_car())
+    asyncio.run(main())
