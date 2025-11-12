@@ -61,7 +61,7 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
         # Check RSSI, maybe retarget if we find improvement
         async with rssi_lock:
             rssi = rssi_buffer[-1] if rssi_buffer else None
-        if rssi is not None and rssi > best_rssi + 0.5:  # hysteresis threshold
+        if rssi is not None and rssi >= best_rssi: # found better signal
             best_rssi = rssi
             target_angle = current_heading
             print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
