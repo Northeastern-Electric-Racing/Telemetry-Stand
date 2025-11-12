@@ -6,7 +6,7 @@ from calibrate_compass import calibrate_compass
 from collect_rssi import collect_rssi_data
 import asyncio
 from pid_controller import PIDController
-from point_at_heading import point_at_heading
+from point_at_heading import point_with_control
 import math
 
 PWM_CHANNEL = 0  # GPIO 12
@@ -42,7 +42,7 @@ def point_at_car():
         kp=0.8, ki=0.1, kd=0.0, output_limits=(MIN_FREQ, MAX_FREQ)
     )
 
-    current_heading = point_at_heading(target_angle, pwm, QMC, NEUTRAL_FREQ)
+    current_heading = point_with_control(target_angle, pwm, QMC, NEUTRAL_FREQ)
 
     while True:
         dt = 0.01
@@ -61,7 +61,7 @@ def point_at_car():
         if abs(error) < 2:
             control_signal = 0.0
 
-        current_heading = point_at_heading(pwm, QMC, control_signal)
+        current_heading = point_with_control(pwm, QMC, control_signal)
 
         # Check RSSI, maybe retarget if we find improvement
         rssi = rssi_buffer[-1]

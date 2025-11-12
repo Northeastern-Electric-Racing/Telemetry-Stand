@@ -4,7 +4,7 @@ from rpi_hardware_pwm import HardwarePWM
 from point_at_car import MIN_FREQ, MAX_FREQ, NEUTRAL_FREQ
 
 
-def point_at_heading(
+def point_with_control(
     pwm: HardwarePWM,
     qmc5883p_handle: QMC5883P,
     control_signal: float,
