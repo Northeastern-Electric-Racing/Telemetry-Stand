@@ -9,6 +9,7 @@ from pid_controller import PIDController
 from point_at_heading import point_at_heading
 import math
 from servo_config import MAX_FREQ, MIN_FREQ, NEUTRAL_FREQ
+from collections import deque
 
 PWM_CHANNEL = 0  # GPIO 12
 PWM_CHIP = 0
@@ -18,7 +19,7 @@ I2C_BUS = 1
 HOST = "192.168.100.11"
 
 
-def point_at_car():
+async def point_at_car():
     QMC = QMC5883P(SMBus(I2C_BUS))
 
     # Set to max frequency to just spin in a circle for calibration
@@ -29,9 +30,11 @@ def point_at_car():
     time.sleep(1)
 
     # Start a thread to read rssi values and populate a buffer
-    rssi_buffer = []
+    rssi_buffer = deque(maxlen=16)
+    rssi_lock = asyncio.Lock()
+    best_rssi = -100.0  # initial low value
 
-    asyncio.run(collect_rssi_data(HOST, rssi_buffer))
+    asyncio.create_task(collect_rssi_data(HOST, rssi_buffer, rssi_lock))
 
     target_angle = 0.0
 
@@ -40,6 +43,8 @@ def point_at_car():
     )
 
     current_heading = point_at_heading(target_angle, pwm, QMC, NEUTRAL_FREQ)
+
+    print("Starting main control loop...")
 
     while True:
         dt = 0.01
@@ -61,8 +66,9 @@ def point_at_car():
         current_heading = point_at_heading(pwm, QMC, control_signal)
 
         # Check RSSI, maybe retarget if we find improvement
-        rssi = rssi_buffer[-1]
-        if rssi > best_rssi + 0.5:  # hysteresis threshold
+        async with rssi_lock:
+            rssi = rssi_buffer[-1] if rssi_buffer else None
+        if rssi is not None and rssi > best_rssi + 0.5:  # hysteresis threshold
             best_rssi = rssi
             target_angle = current_heading
             print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
@@ -71,8 +77,8 @@ def point_at_car():
             f"Angle: {current_heading:.1f}°, RSSI: {rssi:.2f}, Control: {control_signal:.2f}"
         )
 
-        time.sleep(dt)
+        await asyncio.sleep(dt)
 
 
 if __name__ == "__main__":
-    point_at_car()
+    asyncio.run(point_at_car())
