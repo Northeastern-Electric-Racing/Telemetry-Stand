@@ -1,7 +1,6 @@
 from smbus2 import SMBus
 from qmc5883p import QMC5883P
 import time
-import math
 
 I2C_BUS = 1
 
