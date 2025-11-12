@@ -74,7 +74,7 @@ async def point_at_car():
             print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
 
         print(
-            f"Angle: {current_heading:.1f}°, RSSI: {rssi:.2f}, Control: {control_signal:.2f}"
+            f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f}"
         )
 
         await asyncio.sleep(dt)
