@@ -14,14 +14,16 @@ PWM_CHANNEL = 0  # GPIO 12
 PWM_CHIP = 0
 I2C_BUS = 1
 
-QMC = QMC5883P(SMBus(I2C_BUS))
 
 HOST = "192.168.100.11"
-# Set to max frequency to just spin in a circle for calibration
-pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
 
 
 def point_at_car():
+    QMC = QMC5883P(SMBus(I2C_BUS))
+
+    # Set to max frequency to just spin in a circle for calibration
+    pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
+
     min_x, max_x, min_y, max_y = calibrate_compass(QMC, pwm)
     QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
     time.sleep(1)
