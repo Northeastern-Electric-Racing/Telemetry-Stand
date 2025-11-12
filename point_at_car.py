@@ -6,18 +6,13 @@ from calibrate_compass import calibrate_compass
 from collect_rssi import collect_rssi_data
 import asyncio
 from pid_controller import PIDController
-from point_at_heading import point_with_control
+from point_at_heading import point_at_heading
 import math
+from servo_config import MAX_FREQ, MIN_FREQ, NEUTRAL_FREQ
 
 PWM_CHANNEL = 0  # GPIO 12
 PWM_CHIP = 0
 I2C_BUS = 1
-
-# Frequency range (Hz) and center frequency for neutral stop
-MIN_FREQ = 200  # 2100 us pulse
-MAX_FREQ = 500  # 900 us pulse
-
-NEUTRAL_FREQ = (MAX_FREQ + MIN_FREQ) / 2
 
 QMC = QMC5883P(SMBus(I2C_BUS))
 
@@ -42,7 +37,7 @@ def point_at_car():
         kp=0.8, ki=0.1, kd=0.0, output_limits=(MIN_FREQ, MAX_FREQ)
     )
 
-    current_heading = point_with_control(target_angle, pwm, QMC, NEUTRAL_FREQ)
+    current_heading = point_at_heading(target_angle, pwm, QMC, NEUTRAL_FREQ)
 
     while True:
         dt = 0.01
@@ -61,7 +56,7 @@ def point_at_car():
         if abs(error) < 2:
             control_signal = 0.0
 
-        current_heading = point_with_control(pwm, QMC, control_signal)
+        current_heading = point_at_heading(pwm, QMC, control_signal)
 
         # Check RSSI, maybe retarget if we find improvement
         rssi = rssi_buffer[-1]
