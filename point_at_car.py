@@ -70,3 +70,7 @@ def point_at_car():
         )
 
         time.sleep(dt)
+
+
+if __name__ == "__main__":
+    point_at_car()
