@@ -15,10 +15,6 @@ PWM_CHANNEL = 0  # GPIO 12
 PWM_CHIP = 0
 I2C_BUS = 1
 
-
-HOST = "192.168.100.11"
-
-
 async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
     best_rssi = -100.0  # initial low value
 
@@ -76,23 +72,3 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
         await asyncio.sleep(dt)
 
 
-# Initialize tasks and await for them to end
-async def main():
-    rssi_buffer = deque(maxlen=16)
-    rssi_lock = asyncio.Lock()
-
-    rssi_handle = asyncio.create_task(collect_rssi_data(HOST, rssi_buffer, rssi_lock))
-    point_handle = asyncio.create_task(point_at_car(rssi_buffer, rssi_lock))
-
-    tasks = [rssi_handle, point_handle]
-
-    try:
-        await asyncio.gather(*tasks)
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
