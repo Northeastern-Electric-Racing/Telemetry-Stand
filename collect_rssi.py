@@ -7,37 +7,27 @@ client = gmqtt.Client("telemetry-stand")
 TOPIC = "/Base/HaLow/RSSI"
 
 
-async def on_message(
-    client,
-    topic,
-    payload,
-    qos,
-    properties,
-    buffer_to_populate: deque,
-    rssi_lock: asyncio.Lock,
-):
-    # Decode Protobuf message
-    try:
-        rssi_msg = server_data_pb2.ServerData()
-        rssi_msg.ParseFromString(payload)
+def make_on_message(buffer_to_populate: deque, rssi_lock: asyncio.Lock):
+    async def _on_message(client, topic, payload, qos, properties):
+        # quick debug
+        print(
+            f"on_message called: topic={topic} payload_len={len(payload) if payload is not None else 0} qos={qos}"
+        )
+        try:
+            rssi_msg = server_data_pb2.ServerData()
+            rssi_msg.ParseFromString(payload)
+            rssi_value = rssi_msg.value[0]
+            print("Parsed RSSI:", rssi_value)
+            async with rssi_lock:
+                buffer_to_populate.append(rssi_value)
+        except Exception as e:
+            print(f"Failed to parse message: {e}")
 
-        rssi_value = rssi_msg.value[0]
-
-        print("Received RSSI:", rssi_value)
-
-        # Append to buffer with lock
-        async with rssi_lock:
-            buffer_to_populate.append(rssi_value)
-    except Exception as e:
-        print(f"Failed to parse message: {e}")
-    finally:
-        return 0
+    return _on_message
 
 
 async def collect_rssi_data(host, buffer_to_populate: deque, rssi_lock: asyncio.Lock):
-    client.on_message = lambda c, t, p, q, pr: on_message(
-        c, t, p, q, pr, buffer_to_populate, rssi_lock
-    )
+    client.on_message = make_on_message(buffer_to_populate, rssi_lock)
     client.on_connect = lambda c, flags, rc, properties: print(
         "Connected to MQTT broker"
     )

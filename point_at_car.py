@@ -25,16 +25,16 @@ async def point_at_car():
     # Set to max frequency to just spin in a circle for calibration
     pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
 
-    min_x, max_x, min_y, max_y = calibrate_compass(QMC, pwm)
-    QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
-    time.sleep(1)
-
     # Start a thread to read rssi values and populate a buffer
     rssi_buffer = deque(maxlen=16)
     rssi_lock = asyncio.Lock()
     best_rssi = -100.0  # initial low value
 
     asyncio.create_task(collect_rssi_data(HOST, rssi_buffer, rssi_lock))
+
+    min_x, max_x, min_y, max_y = calibrate_compass(QMC, pwm)
+    QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
+    time.sleep(1)
 
     target_angle = 0.0
 
