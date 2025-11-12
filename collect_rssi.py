@@ -44,6 +44,8 @@ async def collect_rssi_data(host, buffer_to_populate: deque, rssi_lock: asyncio.
     client.on_disconnect = lambda c, rc, properties: print(
         "Disconnected from MQTT broker"
     )
+
+    print("Attempting to connect to MQTT broker...")
     await client.connect(host, 1883)
 
     client.subscribe(TOPIC, qos=1)

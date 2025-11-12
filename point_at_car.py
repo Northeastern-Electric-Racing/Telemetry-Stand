@@ -42,7 +42,7 @@ async def point_at_car():
         kp=0.8, ki=0.1, kd=0.0, output_limits=(MIN_FREQ, MAX_FREQ)
     )
 
-    current_heading = point_at_heading(target_angle, pwm, QMC, NEUTRAL_FREQ)
+    current_heading = point_at_heading(pwm, QMC, NEUTRAL_FREQ)
 
     print("Starting main control loop...")
 
