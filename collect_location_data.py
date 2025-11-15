@@ -49,6 +49,9 @@ def make_on_message(
 async def obtain_client_connection(client: gmqtt.Client, host: str, backoff: float):
     try:
         await client.connect(host, 1883)
+        # subscribe to topics we care about
+        client.subscribe(RSSI_TOPIC, qos=1)
+        client.subscribe(GPS_TOPIC, qos=1)
     except:
         print(f"Failed to connect to client, retrying in {backoff} seconds")
         await asyncio.sleep(backoff)
@@ -67,11 +70,6 @@ async def collect_location_data(
     )
 
     print("Attempting to connect to MQTT broker...")
-
-    # subscribe to topics we care about
-    client.subscribe(RSSI_TOPIC, qos=1)
-    client.subscribe(GPS_TOPIC, qos=1)
-
     await obtain_client_connection(client, host, 2)
 
     # Keep the connection alive until cancelled
@@ -87,9 +85,9 @@ if __name__ == "__main__":
     # initialize a small rolling buffer (deque) per key to store the most recent 50 values
     maxlen = 50
     data_store = {
-        "rssi": deque(maxlen=maxlen),
-        "latitude": deque(maxlen=maxlen),
-        "longitude": deque(maxlen=maxlen),
+        RSSI: deque(maxlen=maxlen),
+        REMOTE_LATITUDE: deque(maxlen=maxlen),
+        REMOTE_LONGITUDE: deque(maxlen=maxlen),
     }
     data_lock = asyncio.Lock()
 

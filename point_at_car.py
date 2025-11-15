@@ -1,9 +1,7 @@
 from qmc5883p import QMC5883P
-import time
 from smbus2 import SMBus
 from rpi_hardware_pwm import HardwarePWM
 from calibrate_compass import calibrate_compass
-from collect_location_data import collect_rssi_data
 import asyncio
 from pid_controller import PIDController
 from point_at_heading import point_at_heading
@@ -52,6 +50,8 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
 
     # Set to max frequency to just spin in a circle for calibration
     pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
+
+    print("Starting Calibration")
 
     min_x, max_x, min_y, max_y = await calibrate_compass(QMC, pwm)
     QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
@@ -120,7 +120,7 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
                     f"RSSI dropped to {rssi:.2f} dBm, changing target to {target_angle:.1f}°"
                 )
 
-            if log_index % 50 is 0:
+            if log_index % 50 == 0:
                 print(
                     f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} rssi: {last_rssi:.2f}"
                 )

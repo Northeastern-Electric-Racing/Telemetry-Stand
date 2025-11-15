@@ -7,6 +7,7 @@ session = gps.gps(mode=gps.WATCH_ENABLE)
 
 
 async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen=50):
+    print("Beginning GPS Task")
     try:
         while 0 == session.read():
             if not (gps.MODE_SET & session.valid):
@@ -47,4 +48,5 @@ async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen
     except KeyboardInterrupt:
         pass
     finally:
+        print("Ending GPS Task")
         session.close()
