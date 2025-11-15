@@ -47,6 +47,7 @@ async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen
 
             await sleep(1000)
     except KeyboardInterrupt:
+        print("Keyboard Interrupted GPS Task")
         pass
     except Exception as e:
         print("GPS Task Exception: ", e)

@@ -101,15 +101,19 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
             current_heading = point_at_heading(pwm, QMC, control_signal)
 
             async with data_lock:
-                rssi = get_latest_value(data_store, data_lock, RSSI)
-                remote_latitude = get_latest_value(
+                rssi = await get_latest_value(data_store, data_lock, RSSI)
+                remote_latitude = await get_latest_value(
                     data_store, data_lock, REMOTE_LATITUDE
                 )
-                remote_longitude = get_latest_value(
+                remote_longitude = await get_latest_value(
                     data_store, data_lock, REMOTE_LONGITUDE
                 )
-                base_latitude = get_latest_value(data_store, data_lock, BASE_LATITUDE)
-                base_longitude = get_latest_value(data_store, data_lock, BASE_LONGITUDE)
+                base_latitude = await get_latest_value(
+                    data_store, data_lock, BASE_LATITUDE
+                )
+                base_longitude = await get_latest_value(
+                    data_store, data_lock, BASE_LONGITUDE
+                )
 
             if (
                 remote_latitude is not None
