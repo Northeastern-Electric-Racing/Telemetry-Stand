@@ -42,6 +42,16 @@ def heading_difference(bearing_deg, heading_deg):
     return diff
 
 
+async def get_latest_value(
+    data_store: dict[str, deque], data_lock: asyncio.Lock, key: str
+):
+    async with data_lock:
+        dq = data_store.get(key)
+        if dq and len(dq) > 0:
+            return dq[-1]
+        return None
+
+
 async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
     last_rssi = -100.0  # initial low value
 
@@ -91,11 +101,15 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
             current_heading = point_at_heading(pwm, QMC, control_signal)
 
             async with data_lock:
-                rssi = data_store[RSSI][-1]
-                remote_latitude = data_store[REMOTE_LATITUDE][-1]
-                remote_longitude = data_store[REMOTE_LONGITUDE][-1]
-                base_latitude = data_store[BASE_LATITUDE][-1]
-                base_longitude = data_store[BASE_LONGITUDE][-1]
+                rssi = get_latest_value(data_store, data_lock, RSSI)
+                remote_latitude = get_latest_value(
+                    data_store, data_lock, REMOTE_LATITUDE
+                )
+                remote_longitude = get_latest_value(
+                    data_store, data_lock, REMOTE_LONGITUDE
+                )
+                base_latitude = get_latest_value(data_store, data_lock, BASE_LATITUDE)
+                base_longitude = get_latest_value(data_store, data_lock, BASE_LONGITUDE)
 
             if (
                 remote_latitude is not None

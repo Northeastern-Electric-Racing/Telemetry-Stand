@@ -1,7 +1,7 @@
 from qmc5883p import QMC5883P
 import asyncio
 from rpi_hardware_pwm import HardwarePWM
-
+import time
 
 async def calibrate_compass(
     qmc5883p_handle: QMC5883P,
@@ -26,6 +26,7 @@ async def calibrate_compass(
     # Start PWM to rotate
     pwm.start(50)
 
+    start_time = time.time()
     time_elapsed = 0
     try:
         while time_elapsed < time_to_rotate_B:
@@ -38,7 +39,7 @@ async def calibrate_compass(
             min_y = min(min_y, y_gauss)
             max_y = max(max_y, y_gauss)
 
-            time_elapsed += 0.01
+            time_elapsed = time.time() - start_time
             await asyncio.sleep(0.01)
     except KeyboardInterrupt:
         print("Exiting...")

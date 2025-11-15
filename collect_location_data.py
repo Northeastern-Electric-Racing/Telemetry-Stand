@@ -55,7 +55,7 @@ async def obtain_client_connection(client: gmqtt.Client, host: str, backoff: flo
     except:
         print(f"Failed to connect to client, retrying in {backoff} seconds")
         await asyncio.sleep(backoff)
-        obtain_client_connection(client, host, min(backoff * 2, 30))
+        await obtain_client_connection(client, host, min(backoff * 2, 30))
 
 
 async def collect_location_data(

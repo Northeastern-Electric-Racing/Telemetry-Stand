@@ -9,7 +9,9 @@ session = gps.gps(mode=gps.WATCH_ENABLE)
 async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen=50):
     print("Beginning GPS Task")
     try:
-        while 0 == session.read():
+        while True:
+            if session.read() != 0:
+                continue
             if not (gps.MODE_SET & session.valid):
                 # not useful, probably not a TPV message
                 continue
@@ -43,10 +45,11 @@ async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen
                     data_store[BASE_LATITUDE].append(session.fix.latitude)
                     data_store[BASE_LONGITUDE].append(session.fix.longitude)
 
-            sleep(0.01)
-
+            await sleep(1000)
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        print("GPS Task Exception: ", e)
     finally:
         print("Ending GPS Task")
         session.close()
