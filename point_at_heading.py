@@ -1,7 +1,7 @@
 from qmc5883p import QMC5883P
 import math
 from rpi_hardware_pwm import HardwarePWM
-from servo_config import MIN_FREQ, MAX_FREQ, NEUTRAL_FREQ
+from constants import MIN_FREQ, MAX_FREQ, NEUTRAL_FREQ
 
 
 def point_at_heading(

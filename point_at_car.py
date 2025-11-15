@@ -3,12 +3,20 @@ import time
 from smbus2 import SMBus
 from rpi_hardware_pwm import HardwarePWM
 from calibrate_compass import calibrate_compass
-from collect_rssi import collect_rssi_data
+from collect_location_data import collect_rssi_data
 import asyncio
 from pid_controller import PIDController
 from point_at_heading import point_at_heading
 import math
-from servo_config import MAX_FREQ, MIN_FREQ, NEUTRAL_FREQ
+from constants import (
+    MAX_FREQ,
+    NEUTRAL_FREQ,
+    BASE_LONGITUDE,
+    BASE_LATITUDE,
+    REMOTE_LATITUDE,
+    REMOTE_LONGITUDE,
+    RSSI,
+)
 from collections import deque
 
 PWM_CHANNEL = 0  # GPIO 12
@@ -16,9 +24,30 @@ PWM_CHIP = 0
 I2C_BUS = 1
 
 
-async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
+def bearing_between(lat1, lon1, lat2, lon2):
+    """Return initial bearing (degrees) from point1 to point2 (0..360)."""
+    φ1 = math.radians(lat1)
+    φ2 = math.radians(lat2)
+    Δλ = math.radians(lon2 - lon1)
+    y = math.sin(Δλ) * math.cos(φ2)
+    x = math.cos(φ1) * math.sin(φ2) - math.sin(φ1) * math.cos(φ2) * math.cos(Δλ)
+    θ = math.atan2(y, x)
+    bearing = (math.degrees(θ) + 360.0) % 360.0
+    return bearing
+
+
+def heading_difference(bearing_deg, heading_deg):
+    """Return signed smallest difference (degrees) to turn from heading -> bearing.
+    Positive means turn clockwise (to the right), negative means turn counter-clockwise.
+    Result in range (-180, 180]."""
+    diff = (bearing_deg - heading_deg + 180.0) % 360.0 - 180.0
+    return diff
+
+
+async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
     last_rssi = -100.0  # initial low value
 
+    # Uncalibrated
     QMC = QMC5883P(SMBus(I2C_BUS))
 
     # Set to max frequency to just spin in a circle for calibration
@@ -39,17 +68,13 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
 
     print("Starting main control loop...")
 
-    #  last_rssi_change = time.time()
-
-    #  rssi_change_threshold = 1000 # 1 second
-
     log_index = 0
 
     try:
         while True:
             dt = 0.01
             # --- PID CONTROL ---
-            error = (current_heading - target_angle + 540) % 360 - 180
+            error = heading_difference(target_angle, current_heading)
 
             raw_control = heading_pid.update(error, dt)
 
@@ -65,17 +90,26 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
 
             current_heading = point_at_heading(pwm, QMC, control_signal)
 
-            # Check RSSI, maybe retarget if we find improvement
-            async with rssi_lock:
-                rssi = rssi_buffer[-1] if rssi_buffer else None
-                # Clear Buffer
-                if rssi is not None:
-                    print(f"new rssi: {rssi:.2f}")
-                    rssi_buffer.clear()
-            if rssi is not None and rssi > last_rssi:  # found better signal
+            async with data_lock:
+                rssi = data_store[RSSI][-1]
+                remote_latitude = data_store[REMOTE_LATITUDE][-1]
+                remote_longitude = data_store[REMOTE_LONGITUDE][-1]
+                base_latitude = data_store[BASE_LATITUDE][-1]
+                base_longitude = data_store[BASE_LONGITUDE][-1]
+
+            if (
+                remote_latitude is not None
+                and remote_longitude is not None
+                and base_latitude is not None
+                and base_longitude is not None
+            ):
+                target_angle = bearing_between(
+                    remote_latitude, remote_longitude, base_latitude, base_longitude
+                )
+            elif rssi is not None and rssi > last_rssi:  # found better signal
                 target_angle = current_heading
                 print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
-            if rssi is not None and rssi < last_rssi:  # signal dropped significantly
+            elif rssi is not None and rssi < last_rssi:  # signal dropped significantly
                 # Go the other direction
                 direction = (target_angle - current_heading + 360) % 360
                 if direction < 180:
