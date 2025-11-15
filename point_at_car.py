@@ -17,7 +17,7 @@ I2C_BUS = 1
 
 
 async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
-    best_rssi = -100.0  # initial low value
+    last_rssi = -100.0  # initial low value
 
     QMC = QMC5883P(SMBus(I2C_BUS))
 
@@ -31,43 +31,65 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
 
     target_angle = 0.0
 
-    heading_pid = PIDController(
-        kp=0.8, ki=0.1, kd=0.0, output_limits=(MIN_FREQ, MAX_FREQ)
-    )
+    heading_pid = PIDController(kp=0.8, ki=0.1, kd=0.0)
+
+    pwm.start(50)
 
     current_heading = point_at_heading(pwm, QMC, NEUTRAL_FREQ)
 
     print("Starting main control loop...")
 
-    while True:
-        dt = 0.01
-        # --- PID CONTROL ---
-        error = (current_heading - target_angle + 540) % 360 - 180
+    #  last_rssi_change = time.time()
 
-        raw_control = heading_pid.update(error, dt)
+    #  rssi_change_threshold = 1000 # 1 second
 
-        # --- Smooth ramp-down ---
-        normalized_error = raw_control / 90.0
-        control_signal = math.tanh(
-            normalized_error * 1.5
-        )  # smooth nonlinear compression
+    try:
+        while True:
+            dt = 0.01
+            # --- PID CONTROL ---
+            error = (current_heading - target_angle + 540) % 360 - 180
 
-        # Deadband to avoid jitter near target
-        if abs(error) < 2:
-            control_signal = 0.0
+            raw_control = heading_pid.update(error, dt)
 
-        current_heading = point_at_heading(pwm, QMC, control_signal)
+            # --- Smooth ramp-down ---
+            normalized_error = raw_control / 90.0
+            control_signal = math.tanh(
+                normalized_error * 1.5
+            )  # smooth nonlinear compression
 
-        # Check RSSI, maybe retarget if we find improvement
-        async with rssi_lock:
-            rssi = rssi_buffer[-1] if rssi_buffer else None
-        if rssi is not None and rssi >= best_rssi: # found better signal
-            best_rssi = rssi
-            target_angle = current_heading
-            print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
+            # Deadband to avoid jitter near target
+            if abs(error) < 2:
+                control_signal = 0.0
 
-        print(
-            f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f}"
-        )
+            current_heading = point_at_heading(pwm, QMC, control_signal)
 
-        await asyncio.sleep(dt)
+            # Check RSSI, maybe retarget if we find improvement
+            async with rssi_lock:
+                rssi = rssi_buffer[-1] if rssi_buffer else None
+                # Clear Buffer
+                if rssi is not None:
+                    print(f"new rssi: {rssi:.2f}")
+                    rssi_buffer.clear()
+            if rssi is not None and rssi > last_rssi:  # found better signal
+                target_angle = current_heading
+                print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
+            if rssi is not None and rssi < last_rssi:  # signal dropped significantly
+                # Go the other direction
+                direction = (target_angle - current_heading + 360) % 360
+                if direction < 180:
+                    target_angle = (current_heading - 90) % 360
+                else:
+                    target_angle = (current_heading + 90) % 360
+                print(
+                    f"RSSI dropped to {rssi:.2f} dBm, changing target to {target_angle:.1f}°"
+                )
+
+            print(
+                f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} {last_rssi:.2f}"
+            )
+
+            await asyncio.sleep(dt)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        pwm.stop()
