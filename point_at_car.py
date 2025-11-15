@@ -43,6 +43,8 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
 
     #  rssi_change_threshold = 1000 # 1 second
 
+    log_index = 0
+
     try:
         while True:
             dt = 0.01
@@ -84,9 +86,13 @@ async def point_at_car(rssi_buffer: deque, rssi_lock: asyncio.Lock):
                     f"RSSI dropped to {rssi:.2f} dBm, changing target to {target_angle:.1f}°"
                 )
 
-            print(
-                f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} {last_rssi:.2f}"
-            )
+            if log_index % 50 is 0:
+                print(
+                    f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} rssi: {last_rssi:.2f}"
+                )
+
+            if rssi is not None:
+                last_rssi = rssi
 
             await asyncio.sleep(dt)
     except KeyboardInterrupt:
