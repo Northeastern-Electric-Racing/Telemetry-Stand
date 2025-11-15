@@ -38,7 +38,7 @@ def heading_difference(bearing_deg, heading_deg):
     """Return signed smallest difference (degrees) to turn from heading -> bearing.
     Positive means turn clockwise (to the right), negative means turn counter-clockwise.
     Result in range (-180, 180]."""
-    diff = (bearing_deg - heading_deg + 180.0) % 360.0 - 180.0
+    diff = (bearing_deg - heading_deg + 540.0) % 360.0 - 180.0
     return diff
 
 
@@ -70,7 +70,7 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
 
     target_angle = 0.0
 
-    heading_pid = PIDController(kp=0.8, ki=0.1, kd=0.0)
+    heading_pid = PIDController(kp=0.5, ki=0.1, kd=0.0)
 
     pwm.start(50)
 
@@ -79,10 +79,10 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
     print("Starting main control loop...")
 
     log_index = 0
+    dt = 0.01
 
     try:
         while True:
-            dt = 0.01
             # --- PID CONTROL ---
             error = heading_difference(target_angle, current_heading)
 
@@ -100,20 +100,19 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
 
             current_heading = point_at_heading(pwm, QMC, control_signal)
 
-            async with data_lock:
-                rssi = await get_latest_value(data_store, data_lock, RSSI)
-                remote_latitude = await get_latest_value(
-                    data_store, data_lock, REMOTE_LATITUDE
-                )
-                remote_longitude = await get_latest_value(
-                    data_store, data_lock, REMOTE_LONGITUDE
-                )
-                base_latitude = await get_latest_value(
-                    data_store, data_lock, BASE_LATITUDE
-                )
-                base_longitude = await get_latest_value(
-                    data_store, data_lock, BASE_LONGITUDE
-                )
+            # get_latest_value already acquires the lock internally; do not
+            # hold the shared lock while calling it (would deadlock).
+            rssi = await get_latest_value(data_store, data_lock, RSSI)
+            remote_latitude = await get_latest_value(
+                data_store, data_lock, REMOTE_LATITUDE
+            )
+            remote_longitude = await get_latest_value(
+                data_store, data_lock, REMOTE_LONGITUDE
+            )
+            base_latitude = await get_latest_value(data_store, data_lock, BASE_LATITUDE)
+            base_longitude = await get_latest_value(
+                data_store, data_lock, BASE_LONGITUDE
+            )
 
             if (
                 remote_latitude is not None
@@ -124,10 +123,15 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
                 target_angle = bearing_between(
                     remote_latitude, remote_longitude, base_latitude, base_longitude
                 )
+                print(
+                    f"Remote lat: {remote_latitude} remote lon: {remote_longitude} base lat: {base_latitude} base lon: {base_longitude}"
+                )
             elif rssi is not None and rssi > last_rssi:  # found better signal
                 target_angle = current_heading
                 print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
-            elif rssi is not None and rssi < last_rssi:  # signal dropped significantly
+            elif (
+                rssi is not None and rssi < last_rssi - 5
+            ):  # signal dropped significantly
                 # Go the other direction
                 direction = (target_angle - current_heading + 360) % 360
                 if direction < 180:
@@ -140,16 +144,17 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
 
             if log_index % 50 == 0:
                 print(
-                    f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} rssi: {last_rssi:.2f}"
+                    f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} rssi: {last_rssi:.2f} {base_latitude}, {base_longitude}"
                 )
 
             if rssi is not None:
                 last_rssi = rssi
-            
+
             log_index += 1
 
             await asyncio.sleep(dt)
     except KeyboardInterrupt:
         pass
     finally:
+        print("Exiting Point at Car")
         pwm.stop()
