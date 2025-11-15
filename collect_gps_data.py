@@ -1,16 +1,29 @@
 import gps
-from asyncio import sleep, Lock
+import asyncio
 from constants import BASE_LATITUDE, BASE_LONGITUDE
 from collections import deque
 
 session = gps.gps(mode=gps.WATCH_ENABLE)
 
 
-async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen=50):
+async def collect_gps_data(
+    data_store: dict[str, deque], data_lock: asyncio.Lock, maxlen=50
+):
     print("Beginning GPS Task")
     try:
         while True:
-            if session.read() != 0:
+            # session.read() is a blocking call; run it in the default executor
+            # with a short timeout so this task doesn't block the event loop.
+            loop = asyncio.get_running_loop()
+            try:
+                read_ret = await asyncio.wait_for(
+                    loop.run_in_executor(None, session.read), timeout=0.01
+                )
+            except asyncio.TimeoutError:
+                # no data available within 10 ms, try again
+                continue
+
+            if read_ret != 0:
                 continue
             if not (gps.MODE_SET & session.valid):
                 # not useful, probably not a TPV message
@@ -45,7 +58,7 @@ async def collect_gps_data(data_store: dict[str, deque], data_lock: Lock, maxlen
                     data_store[BASE_LATITUDE].append(session.fix.latitude)
                     data_store[BASE_LONGITUDE].append(session.fix.longitude)
 
-            await sleep(1000)
+            await asyncio.sleep(1000)
     except KeyboardInterrupt:
         print("Keyboard Interrupted GPS Task")
         pass
