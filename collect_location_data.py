@@ -52,8 +52,8 @@ async def obtain_client_connection(client: gmqtt.Client, host: str, backoff: flo
         # subscribe to topics we care about
         client.subscribe(RSSI_TOPIC, qos=1)
         client.subscribe(GPS_TOPIC, qos=1)
-    except:
-        print(f"Failed to connect to client, retrying in {backoff} seconds")
+    except Exception as e:
+        print(f"Failed to connect to client {e}, retrying in {backoff} seconds")
         await asyncio.sleep(backoff)
         await obtain_client_connection(client, host, min(backoff * 2, 30))
 

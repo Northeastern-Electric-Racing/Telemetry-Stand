@@ -145,6 +145,8 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
 
             if rssi is not None:
                 last_rssi = rssi
+            
+            log_index += 1
 
             await asyncio.sleep(dt)
     except KeyboardInterrupt:
