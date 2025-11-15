@@ -1,11 +1,10 @@
 import time
 import struct
-from mag_base import mag_base
 
 # https://github.com/ChangboBro/QMC5883-3-Axis-magnetic-Sensor-micropython
 
 
-class QMC5883P(mag_base):
+class QMC5883P():
     ADDR = 0x2C
 
     CONFIG_2GAUSS = 3
