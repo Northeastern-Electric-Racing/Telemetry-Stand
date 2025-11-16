@@ -1,11 +1,11 @@
 from collections import deque
-import asyncio
+import threading
 
 
 async def get_latest_value(
-    data_store: dict[str, deque], data_lock: asyncio.Lock, key: str
+    data_store: dict[str, deque], data_lock: threading.Lock, key: str
 ):
-    async with data_lock:
+    with data_lock:
         dq = data_store.get(key)
         if dq and len(dq) > 0:
             return dq[-1]
@@ -13,10 +13,10 @@ async def get_latest_value(
 
 
 async def get_latest_n(
-    data_store: dict[str, deque], data_lock: asyncio.Lock, key: str, n: int
+    data_store: dict[str, deque], data_lock: threading.Lock, key: str, n: int
 ) -> list:
     """Return up to the last n values for key as a list (oldest..newest)."""
-    async with data_lock:
+    with data_lock:
         dq = data_store.get(key)
         if not dq:
             return []

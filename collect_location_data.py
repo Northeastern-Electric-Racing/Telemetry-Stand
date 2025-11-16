@@ -12,6 +12,7 @@ from constants import (
 )
 import time
 from data_store import get_latest_value
+import threading
 
 client = gmqtt.Client("telemetry-stand")
 RSSI_TOPIC = "Base/HaLow/RSSI"
@@ -21,7 +22,7 @@ TIMEOUT_DURATION = 5  # seconds
 
 
 def make_on_message(
-    data_store: Dict[str, deque], data_lock: asyncio.Lock, maxlen: int = 50
+    data_store: Dict[str, deque], data_lock: threading.Lock, maxlen: int = 50
 ):
     async def _on_message(client, topic, payload, qos, properties):
         try:
@@ -32,7 +33,7 @@ def make_on_message(
             if topic == RSSI_TOPIC:
                 # RSSI messages contain a single value
                 rssi_value = server_msg.values[0]
-                async with data_lock:
+                with data_lock:
                     # ensure deque exists
                     if RSSI not in data_store:
                         data_store[RSSI] = deque(maxlen=maxlen)
@@ -42,7 +43,7 @@ def make_on_message(
                 # GPS messages contain latitude, longitude
                 latitude = server_msg.values[0]
                 longitude = server_msg.values[1]
-                async with data_lock:
+                with data_lock:
                     if REMOTE_LATITUDE not in data_store:
                         data_store[REMOTE_LATITUDE] = deque(maxlen=maxlen)
                     if REMOTE_LONGITUDE not in data_store:
@@ -82,7 +83,7 @@ async def obtain_client_connection(client: gmqtt.Client, host: str, backoff: flo
 
 
 async def collect_location_data(
-    host: str, data_store: Dict[str, deque], data_lock: asyncio.Lock
+    host: str, data_store: Dict[str, deque], data_lock: threading.Lock
 ):
     client.on_message = make_on_message(data_store, data_lock)
     client.on_connect = lambda c, flags, rc, properties: print(
@@ -105,7 +106,8 @@ async def collect_location_data(
                 last_connection_time is None
                 or time.time() - last_connection_time > TIMEOUT_DURATION
             ):
-                async with data_lock:
+                print("No data received within ", TIMEOUT_DURATION)
+                with data_lock:
                     data_store[REMOTE_LATITUDE].append(None)
                     data_store[REMOTE_LONGITUDE].append(None)
                     data_store[REMOTE_CONNECTION].append(False)

@@ -75,6 +75,8 @@ async def probe_rssi_directions(
     Returns the absolute angle (0..360) with the highest mean RSSI.
     """
 
+    print("Probing on RSSI")
+
     # Generate offset sequence: 0, +s, -s, +2s, -2s, ...
     offsets = [0]
     k = 1
@@ -121,6 +123,7 @@ async def probe_rssi_directions(
 
         connected = await get_latest_value(data_store, data_lock, REMOTE_CONNECTION)
         if connected:
+            print("Now connected, pointing at ", best_angle)
             best_angle = candidate % 360.0
             return best_angle
 
@@ -129,6 +132,8 @@ async def probe_rssi_directions(
             best_score = score
             # keep the best in a 0..360 normalized form
             best_angle = candidate % 360.0
+
+    print("Best Angle: ", best_angle)
 
     return best_angle
 
