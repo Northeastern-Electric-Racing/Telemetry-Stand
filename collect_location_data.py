@@ -24,7 +24,7 @@ TIMEOUT_DURATION = 5  # seconds
 def make_on_message(
     data_store: Dict[str, deque], data_lock: threading.Lock, maxlen: int = 50
 ):
-    async def _on_message(client, topic, payload, qos, properties):
+    def _on_message(client, topic, payload, qos, properties):
         try:
             server_msg = server_data_pb2.ServerData()
             server_msg.ParseFromString(payload)
@@ -34,9 +34,6 @@ def make_on_message(
                 # RSSI messages contain a single value
                 rssi_value = server_msg.values[0]
                 with data_lock:
-                    # ensure deque exists
-                    if RSSI not in data_store:
-                        data_store[RSSI] = deque(maxlen=maxlen)
                     data_store[RSSI].append(rssi_value)
 
             elif topic == GPS_TOPIC:
@@ -44,10 +41,6 @@ def make_on_message(
                 latitude = server_msg.values[0]
                 longitude = server_msg.values[1]
                 with data_lock:
-                    if REMOTE_LATITUDE not in data_store:
-                        data_store[REMOTE_LATITUDE] = deque(maxlen=maxlen)
-                    if REMOTE_LONGITUDE not in data_store:
-                        data_store[REMOTE_LONGITUDE] = deque(maxlen=maxlen)
                     data_store[REMOTE_LATITUDE].append(latitude)
                     data_store[REMOTE_LONGITUDE].append(longitude)
                     data_store[REMOTE_CONNECTION].append(True)
@@ -92,6 +85,7 @@ async def collect_location_data(
     client.on_disconnect = make_on_disconnect(host)
 
     print("Attempting to connect to MQTT broker...")
+
     await obtain_client_connection(client, host, 2)
 
     # Keep the connection alive until cancelled

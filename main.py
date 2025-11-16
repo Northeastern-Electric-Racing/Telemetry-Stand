@@ -20,13 +20,16 @@ async def main():
     gps_thread = threading.Thread(
         target=collect_gps_data, args=(data_store, data_lock), daemon=True
     )
+    gps_thread.start()
 
     remote_handle = asyncio.create_task(
         collect_location_data(HOST, data_store, data_lock)
     )
-    point_handle = asyncio.create_task(point_at_car(data_store, data_lock))
+    # point_handle = asyncio.create_task(point_at_car(data_store, data_lock))
 
-    tasks = [remote_handle, point_handle]
+    tasks = [
+        remote_handle,
+    ]
 
     try:
         await asyncio.gather(*tasks)
