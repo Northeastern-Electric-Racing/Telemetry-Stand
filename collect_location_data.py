@@ -58,6 +58,17 @@ def make_on_message(
     return _on_message
 
 
+def make_on_disconnect(host: str):
+    async def _on_reconnect(client, properties):
+        await obtain_client_connection(client, host, 2)
+
+    def _on_disconnect(client, packet):
+        # schedule the coroutine properly
+        asyncio.create_task(_on_reconnect(client, None))
+
+    return _on_disconnect
+
+
 async def obtain_client_connection(client: gmqtt.Client, host: str, backoff: float):
     try:
         await client.connect(host, 1883)
@@ -77,7 +88,7 @@ async def collect_location_data(
     client.on_connect = lambda c, flags, rc, properties: print(
         "Connected to MQTT broker"
     )
-    client.on_disconnect = lambda c, properties: obtain_client_connection(c, host, 2)
+    client.on_disconnect = make_on_disconnect(host)
 
     print("Attempting to connect to MQTT broker...")
     await obtain_client_connection(client, host, 2)
@@ -90,7 +101,10 @@ async def collect_location_data(
                 data_store, data_lock, LAST_CONNECTION_TIME
             )
 
-            if time.time() - last_connection_time > TIMEOUT_DURATION:
+            if (
+                last_connection_time is None
+                or time.time() - last_connection_time > TIMEOUT_DURATION
+            ):
                 async with data_lock:
                     data_store[REMOTE_LATITUDE].append(None)
                     data_store[REMOTE_LONGITUDE].append(None)

@@ -206,8 +206,14 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
             )
 
             if not remote_conn:
-                await probe_rssi_directions(pwm, qmc_handle, data_store, data_lock)
-                continue
+                try:
+                    target_angle = await probe_rssi_directions(
+                        pwm, qmc_handle, data_store, data_lock, current_heading
+                    )
+                except Exception as e:
+                    print("Error encountered while probing rssi: ", e)
+                finally:
+                    continue
 
             if (
                 remote_latitude is not None

@@ -26,9 +26,9 @@ def point_at_heading(
 
     servo_freq = max(MIN_FREQ, min(MAX_FREQ, servo_freq))
 
-    print(
-        f"Heading: {heading_deg:.1f}°, Control: {control_signal:.2f}, Freq: {servo_freq:.1f} Hz"
-    )
+    # print(
+    #     f"Heading: {heading_deg:.1f}°, Control: {control_signal:.2f}, Freq: {servo_freq:.1f} Hz"
+    # )
 
     pwm.change_frequency(int(servo_freq))
 
