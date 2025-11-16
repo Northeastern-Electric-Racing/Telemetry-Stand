@@ -3,11 +3,21 @@ import asyncio
 import server_data_pb2
 from collections import deque
 from typing import Dict
-from constants import RSSI, REMOTE_LATITUDE, REMOTE_LONGITUDE
+from constants import (
+    RSSI,
+    REMOTE_LATITUDE,
+    REMOTE_LONGITUDE,
+    REMOTE_CONNECTION,
+    LAST_CONNECTION_TIME,
+)
+import time
+from data_store import get_latest_value
 
 client = gmqtt.Client("telemetry-stand")
 RSSI_TOPIC = "Base/HaLow/RSSI"
-GPS_TOPIC = "TPU/GPS/Location"
+GPS_TOPIC = "TPU/GPS2/Location"
+
+TIMEOUT_DURATION = 5  # seconds
 
 
 def make_on_message(
@@ -39,6 +49,8 @@ def make_on_message(
                         data_store[REMOTE_LONGITUDE] = deque(maxlen=maxlen)
                     data_store[REMOTE_LATITUDE].append(latitude)
                     data_store[REMOTE_LONGITUDE].append(longitude)
+                    data_store[REMOTE_CONNECTION].append(True)
+                    data_store[LAST_CONNECTION_TIME].append(time.time())
 
         except Exception as e:
             print(f"Failed to parse message: {e}")
@@ -65,16 +77,26 @@ async def collect_location_data(
     client.on_connect = lambda c, flags, rc, properties: print(
         "Connected to MQTT broker"
     )
-    client.on_disconnect = lambda c, rc, properties: obtain_client_connection(
-        c, host, 2
-    )
+    client.on_disconnect = lambda c, properties: obtain_client_connection(c, host, 2)
 
     print("Attempting to connect to MQTT broker...")
     await obtain_client_connection(client, host, 2)
 
     # Keep the connection alive until cancelled
     try:
-        await asyncio.Event().wait()
+        while True:
+            # Check the last connceted message and wipe data if missing
+            last_connection_time = await get_latest_value(
+                data_store, data_lock, LAST_CONNECTION_TIME
+            )
+
+            if time.time() - last_connection_time > TIMEOUT_DURATION:
+                async with data_lock:
+                    data_store[REMOTE_LATITUDE].append(None)
+                    data_store[REMOTE_LONGITUDE].append(None)
+                    data_store[REMOTE_CONNECTION].append(False)
+
+            await asyncio.sleep(TIMEOUT_DURATION)
     except KeyboardInterrupt:
         print("Disconnecting...")
     finally:

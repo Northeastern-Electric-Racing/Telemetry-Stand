@@ -13,9 +13,12 @@ from constants import (
     BASE_LATITUDE,
     REMOTE_LATITUDE,
     REMOTE_LONGITUDE,
+    REMOTE_CONNECTION,
     RSSI,
 )
 from collections import deque
+from data_store import get_latest_value, get_latest_n
+import statistics
 
 PWM_CHANNEL = 0  # GPIO 12
 PWM_CHIP = 0
@@ -36,45 +39,123 @@ def bearing_between(lat1, lon1, lat2, lon2):
 
 def heading_difference(bearing_deg, heading_deg):
     """Return signed smallest difference (degrees) to turn from heading -> bearing.
+    Uses a numerically stable atan2(sin,cos) formulation to avoid +/-180 flips.
     Positive means turn clockwise (to the right), negative means turn counter-clockwise.
-    Result in range (-180, 180]."""
-    diff = (bearing_deg - heading_deg + 540.0) % 360.0 - 180.0
-    return diff
+    Result is in (-180, 180].
+    """
+    # Convert to radians and compute wrapped difference via atan2(sin, cos)
+    br = math.radians(bearing_deg)
+    hr = math.radians(heading_deg)
+    d = math.atan2(math.sin(br - hr), math.cos(br - hr))
+    return math.degrees(d)
 
 
-async def get_latest_value(
-    data_store: dict[str, deque], data_lock: asyncio.Lock, key: str
+def nearest_equivalent_angle(target_deg: float, reference_deg: float) -> float:
+    """Return an equivalent angle to target_deg that is closest to reference_deg.
+    This avoids large 360-degree jumps when the heading crosses the -180/180 boundary.
+    """
+    # shift both into a common range around reference
+    diff = (target_deg - reference_deg + 180.0) % 360.0 - 180.0
+    return reference_deg + diff
+
+
+async def probe_rssi_directions(
+    pwm,
+    qmc,
+    data_store: dict[str, deque],
+    data_lock: asyncio.Lock,
+    center_angle: float,
+    max_offset: float = 90.0,
+    step: float = 15.0,
+    samples_per_angle: int = 5,
+    settle_time: float = 0.5,
 ):
-    async with data_lock:
-        dq = data_store.get(key)
-        if dq and len(dq) > 0:
-            return dq[-1]
-        return None
+    """Probe outward from center_angle in increasing offsets (0, +step, -step, +2*step, -2*step...) up to max_offset.
+    For each candidate angle, move the actuator toward it, wait settle_time, sample recent RSSI values and compute the mean.
+    Returns the absolute angle (0..360) with the highest mean RSSI.
+    """
+
+    # Generate offset sequence: 0, +s, -s, +2s, -2s, ...
+    offsets = [0]
+    k = 1
+    while k * step <= max_offset:
+        offsets.append(k * step)
+        offsets.append(-k * step)
+        k += 1
+
+    best_angle = center_angle
+    best_score = -float("inf")
+
+    for off in offsets:
+        candidate = center_angle + off
+        # normalize candidate to range (-180,180] near previous best to avoid flips
+        candidate = nearest_equivalent_angle(candidate, best_angle)
+
+        # Move toward candidate by commanding the actuator until within tolerance
+        # Use a simple bang-bang control to move; rely on point_at_heading to command PWM
+        for _ in range(200):
+            # read heading and command a moderate control signal toward candidate
+            current = point_at_heading(
+                pwm, qmc, 0
+            )  # read current heading without changing freq
+            err = heading_difference(candidate, current)
+            if abs(err) <= 3.0:
+                break
+            # command moderate motion in the needed direction
+            ctrl = math.copysign(0.6, err)
+            point_at_heading(pwm, qmc, ctrl)
+            await asyncio.sleep(0.05)
+
+        # settled near candidate; wait additional settle_time for RSSI to stabilize
+        await asyncio.sleep(settle_time)
+
+        # sample recent RSSI values
+        vals = await get_latest_n(data_store, data_lock, RSSI, samples_per_angle)
+        if not vals:
+            score = -float("inf")
+        else:
+            try:
+                score = statistics.mean(vals)
+            except Exception:
+                score = -float("inf")
+
+        connected = await get_latest_value(data_store, data_lock, REMOTE_CONNECTION)
+        if connected:
+            best_angle = candidate % 360.0
+            return best_angle
+
+        # choose the best
+        if score > best_score:
+            best_score = score
+            # keep the best in a 0..360 normalized form
+            best_angle = candidate % 360.0
+
+    return best_angle
 
 
 async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
     last_rssi = -100.0  # initial low value
 
     # Uncalibrated
-    QMC = QMC5883P(SMBus(I2C_BUS))
+    qmc_handle = QMC5883P(SMBus(I2C_BUS))
 
     # Set to max frequency to just spin in a circle for calibration
     pwm = HardwarePWM(pwm_channel=PWM_CHANNEL, hz=int(MAX_FREQ), chip=PWM_CHIP)
 
     print("Starting Calibration")
 
-    min_x, max_x, min_y, max_y = await calibrate_compass(QMC, pwm)
-    QMC = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
+    min_x, max_x, min_y, max_y = await calibrate_compass(qmc_handle, pwm)
+    qmc_handle = QMC5883P(SMBus(I2C_BUS), max_x, min_x, max_y, min_y)
 
     await asyncio.sleep(1)
 
     target_angle = 0.0
 
-    heading_pid = PIDController(kp=0.5, ki=0.1, kd=0.0)
+    heading_pid = PIDController(kp=0.5, ki=0.01, kd=0.05)
 
     pwm.start(50)
 
-    current_heading = point_at_heading(pwm, QMC, NEUTRAL_FREQ)
+    current_heading = point_at_heading(pwm, qmc_handle, NEUTRAL_FREQ)
 
     print("Starting main control loop...")
 
@@ -86,7 +167,7 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
             # --- PID CONTROL ---
             error = heading_difference(target_angle, current_heading)
 
-            raw_control = heading_pid.update(error, dt)
+            raw_control = -heading_pid.update(error, dt)
 
             # --- Smooth ramp-down ---
             normalized_error = raw_control / 90.0
@@ -98,11 +179,15 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
             if abs(error) < 2:
                 control_signal = 0.0
 
-            current_heading = point_at_heading(pwm, QMC, control_signal)
+            try:
+                current_heading = point_at_heading(pwm, qmc_handle, control_signal)
+            except Exception as e:
+                print("Failed to get current heading: ", e)
 
             # get_latest_value already acquires the lock internally; do not
             # hold the shared lock while calling it (would deadlock).
             rssi = await get_latest_value(data_store, data_lock, RSSI)
+
             remote_latitude = await get_latest_value(
                 data_store, data_lock, REMOTE_LATITUDE
             )
@@ -114,37 +199,34 @@ async def point_at_car(data_store: dict[str, deque], data_lock: asyncio.Lock):
                 data_store, data_lock, BASE_LONGITUDE
             )
 
+            # If a remote connection flag is reported, lock onto that signal
+            # and hold the target pointing to the remote until the flag goes false.
+            remote_conn = await get_latest_value(
+                data_store, data_lock, REMOTE_CONNECTION
+            )
+
+            if not remote_conn:
+                await probe_rssi_directions(pwm, qmc_handle, data_store, data_lock)
+                continue
+
             if (
                 remote_latitude is not None
                 and remote_longitude is not None
                 and base_latitude is not None
                 and base_longitude is not None
             ):
-                target_angle = bearing_between(
-                    remote_latitude, remote_longitude, base_latitude, base_longitude
+                bearing = bearing_between(
+                    base_latitude,
+                    base_longitude,
+                    remote_latitude,
+                    remote_longitude,
                 )
-                print(
-                    f"Remote lat: {remote_latitude} remote lon: {remote_longitude} base lat: {base_latitude} base lon: {base_longitude}"
-                )
-            elif rssi is not None and rssi > last_rssi:  # found better signal
-                target_angle = current_heading
-                print(f"New best RSSI: {rssi:.2f} dBm at {target_angle:.1f}°")
-            elif (
-                rssi is not None and rssi < last_rssi - 5
-            ):  # signal dropped significantly
-                # Go the other direction
-                direction = (target_angle - current_heading + 360) % 360
-                if direction < 180:
-                    target_angle = (current_heading - 90) % 360
-                else:
-                    target_angle = (current_heading + 90) % 360
-                print(
-                    f"RSSI dropped to {rssi:.2f} dBm, changing target to {target_angle:.1f}°"
-                )
+
+                target_angle = nearest_equivalent_angle(bearing, target_angle)
 
             if log_index % 50 == 0:
                 print(
-                    f"Angle: {current_heading:.1f}°, Error: {error:.2f} Control: {control_signal:.2f} rssi: {last_rssi:.2f} {base_latitude}, {base_longitude}"
+                    f"Angle: {current_heading:.1f}°, target: {target_angle}, Error: {error:.2f} Control: {control_signal:.2f} rssi: {last_rssi:.2f} {base_latitude}, {base_longitude} {remote_latitude} {remote_longitude}"
                 )
 
             if rssi is not None:

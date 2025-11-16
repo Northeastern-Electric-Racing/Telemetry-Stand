@@ -9,6 +9,8 @@ BASE_LONGITUDE = "base_longitude"
 REMOTE_LATITUDE = "remote_latitude"
 REMOTE_LONGITUDE = "remote_longitude"
 RSSI = "rssi"
+REMOTE_CONNECTION = "remote_connection"
+LAST_CONNECTION_TIME = "last_connection"
 
 DATA_STORE_TOPICS = [
     BASE_LATITUDE,
@@ -16,4 +18,6 @@ DATA_STORE_TOPICS = [
     REMOTE_LATITUDE,
     REMOTE_LONGITUDE,
     RSSI,
+    REMOTE_CONNECTION,
+    LAST_CONNECTION_TIME,
 ]
