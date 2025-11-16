@@ -25,11 +25,9 @@ async def main():
     remote_handle = asyncio.create_task(
         collect_location_data(HOST, data_store, data_lock)
     )
-    # point_handle = asyncio.create_task(point_at_car(data_store, data_lock))
+    point_handle = asyncio.create_task(point_at_car(data_store, data_lock))
 
-    tasks = [
-        remote_handle,
-    ]
+    tasks = [remote_handle, point_handle]
 
     try:
         await asyncio.gather(*tasks)
