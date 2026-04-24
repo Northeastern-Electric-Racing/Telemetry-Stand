@@ -79,16 +79,6 @@ class QMC5883P(mag_base):
         else:
             raise TypeError("buff must be int, bytes, bytearray, or list")
 
-    def range_sel(self):
-        self.range = QMC5883P.CONFIG_2GAUSS
-        status = self.i2c_readregs(0x09, 1)
-        if status[0] & 0x02 != 0x00:
-            if self.range == 0:
-                return
-            else:
-                self.range -= 1
-                self.i2c_writereg(0x0B, bytes([self.range << 2]))
-
     def _set_cnf(self, val, offset, sz):
         cur = self.i2c_readregs(0x0A, 1)[0]
         cur &= ~(((1 << sz) - 1) << offset)

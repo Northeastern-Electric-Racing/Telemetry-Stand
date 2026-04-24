@@ -4,13 +4,12 @@ from collections import deque
 import threading
 import time
 
-session = gps.gps(mode=gps.WATCH_ENABLE)
-
 
 def collect_gps_data(
-    data_store: dict[str, deque], data_lock: threading.Lock, maxlen=50
+    data_store: dict[str, deque], data_lock: threading.Lock
 ):
     print("Beginning GPS Thread")
+    session = gps.gps(mode=gps.WATCH_ENABLE)
     try:
         while True:
             read_ret = session.read()
@@ -22,9 +21,6 @@ def collect_gps_data(
             if gps.isfinite(session.fix.latitude) and gps.isfinite(
                 session.fix.longitude
             ):
-                # print(
-                #     " Lat %.6f Lon %.6f" % (session.fix.latitude, session.fix.longitude)
-                # )
                 with data_lock:
                     data_store[BASE_LATITUDE].append(session.fix.latitude)
                     data_store[BASE_LONGITUDE].append(session.fix.longitude)
@@ -32,7 +28,6 @@ def collect_gps_data(
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("Keyboard Interrupted GPS Thread")
-        pass
     except Exception as e:
         print("GPS Thread Exception: ", e)
     finally:

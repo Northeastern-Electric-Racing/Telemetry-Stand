@@ -4,23 +4,15 @@ import time
 
 I2C_BUS = 1
 
-QMC5883P = QMC5883P(SMBus(I2C_BUS))
+compass = QMC5883P(SMBus(I2C_BUS))
 
 min_x, max_x = 32768, -32768
 min_y, max_y = 32768, -32768
 
 while True:
-    x_gauss, y_gauss, z_gauss = QMC5883P.read_raw()
+    x_gauss, y_gauss, z_gauss = compass.read_raw()
 
     print(f"X: {x_gauss}, Y: {y_gauss}, Z: {z_gauss}")
-
-    # heading_rad = math.atan2(x_gauss, y_gauss)
-    # heading_deg = math.degrees(heading_rad)
-
-    # if heading_deg < 0:
-    #     heading_deg += 360
-
-    # print(f"Heading: {heading_deg}°")
 
     min_x = min(min_x, x_gauss)
     max_x = max(max_x, x_gauss)

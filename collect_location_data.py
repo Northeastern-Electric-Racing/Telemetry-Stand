@@ -15,7 +15,7 @@ from data_store import get_latest_value
 import threading
 
 client = gmqtt.Client("telemetry-stand")
-RSSI_TOPIC = "Base/HaLow/RSSI"
+RSSI_TOPIC = "AP/HaLow/RSSI"
 GPS_TOPIC = "TPU/GPS2/Location"
 
 TIMEOUT_DURATION = 5  # seconds
@@ -53,26 +53,26 @@ def make_on_message(
 
 
 def make_on_disconnect(host: str):
-    async def _on_reconnect(client, properties):
-        await obtain_client_connection(client, host, 2)
-
     def _on_disconnect(client, packet):
-        # schedule the coroutine properly
-        asyncio.create_task(_on_reconnect(client, None))
+        asyncio.create_task(obtain_client_connection(client, host))
 
     return _on_disconnect
 
 
-async def obtain_client_connection(client: gmqtt.Client, host: str, backoff: float):
-    try:
-        await client.connect(host, 1883)
-        # subscribe to topics we care about
-        client.subscribe(RSSI_TOPIC, qos=1)
-        client.subscribe(GPS_TOPIC, qos=1)
-    except Exception as e:
-        print(f"Failed to connect to client {e}, retrying in {backoff} seconds")
-        await asyncio.sleep(backoff)
-        await obtain_client_connection(client, host, min(backoff * 2, 30))
+async def obtain_client_connection(client: gmqtt.Client, host: str):
+    backoff = 2.0
+    while True:
+        try:
+            await client.connect(host, 1883)
+            client.subscribe(RSSI_TOPIC, qos=1)
+            client.subscribe(GPS_TOPIC, qos=1)
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"MQTT connection failed: {e}, retrying in {backoff:.0f}s")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
 
 
 async def collect_location_data(
@@ -86,13 +86,13 @@ async def collect_location_data(
 
     print("Attempting to connect to MQTT broker...")
 
-    await obtain_client_connection(client, host, 2)
+    await obtain_client_connection(client, host)
 
     # Keep the connection alive until cancelled
     try:
         while True:
-            # Check the last connceted message and wipe data if missing
-            last_connection_time = await get_latest_value(
+            # Check the last connected message and wipe data if missing
+            last_connection_time = get_latest_value(
                 data_store, data_lock, LAST_CONNECTION_TIME
             )
 
@@ -107,8 +107,6 @@ async def collect_location_data(
                     data_store[REMOTE_CONNECTION].append(False)
 
             await asyncio.sleep(TIMEOUT_DURATION)
-    except KeyboardInterrupt:
-        print("Disconnecting...")
     finally:
         await client.disconnect()
 

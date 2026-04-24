@@ -66,15 +66,15 @@ def main():
         start = time.time()
         while True:
             elapsed = time.time() - start
+            if args.duration > 0 and elapsed >= args.duration:
+                break
             freq = freq + freq_delta
             pwm.change_frequency(int(freq))
             print(f"Changed frequency to: {freq} Hz")
-            if (freq > max_frequency):
-                freq_delta = -1
-            elif (freq < min_frequency):
-                freq_delta = 1
-            # if args.duration > 0 and elapsed >= args.duration:
-            #     break
+            if freq > max_frequency:
+                freq_delta = -10
+            elif freq < min_frequency:
+                freq_delta = 10
             time.sleep(0.1)
 
     except KeyboardInterrupt:
